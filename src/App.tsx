@@ -1,61 +1,91 @@
-import { useState } from 'react';
-import { Toaster } from '@/components/ui/sonner';
-import { LandingPage } from '@/components/LandingPage';
-import { Dashboard } from '@/components/Dashboard';
-import { ExamInterface } from '@/components/ExamInterface';
-import { ResultsPage } from '@/components/ResultsPage';
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 
-type View = 'landing' | 'dashboard' | 'exam' | 'results';
+// Pages
+import StudentDashboard from "./pages/StudentDashboard";
+import LecturerDashboard from "./pages/LecturerDashboard";
+import Login from "./pages/Login";
+
+// Protected Route Component
+function ProtectedRoute({ children, allowedRoles }: { 
+  children: React.ReactNode; 
+  allowedRoles: string[] 
+}) {
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // TODO: Replace with Clerk or Supabase auth check
+    const storedRole = localStorage.getItem("userRole"); // or get from Clerk metadata
+    setUserRole(storedRole);
+    setLoading(false);
+  }, []);
+
+  if (loading) return <div className="flex items-center justify-center h-screen">Loading...</div>;
+
+  if (!userRole) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!allowedRoles.includes(userRole)) {
+    return <Navigate to={userRole === "lecturer" ? "/lecturer" : "/dashboard"} replace />;
+  }
+
+  return <>{children}</>;
+}
 
 function App() {
-  const [view, setView] = useState<View>('landing');
-  const [selectedExam, setSelectedExam] = useState<any>(null);
-  const [examResult, setExamResult] = useState<{ score: number; strikes: number; totalQuestions: number } | null>(null);
-
-  const handleStart = () => setView('dashboard');
-  
-  const handleStartExam = (exam: any) => {
-    setSelectedExam(exam);
-    setView('exam');
-  };
-
-  const handleFinishExam = (result: { score: number; strikes: number; totalQuestions: number }) => {
-    setExamResult(result);
-    setView('results');
-  };
-
-  const handleBackToDashboard = () => {
-    setSelectedExam(null);
-    setExamResult(null);
-    setView('dashboard');
-  };
-
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {view === 'landing' && <LandingPage onStart={handleStart} />}
-      
-      {view === 'dashboard' && <Dashboard onStartExam={handleStartExam} />}
-      
-      {view === 'exam' && selectedExam && (
-        <ExamInterface 
-          examTitle={selectedExam.title} 
-          duration={selectedExam.duration} 
-          onFinish={handleFinishExam} 
+    <Router>
+      <Routes>
+        {/* Public Routes */}
+        <Route path="/login" element={<Login />} />
+
+        {/* Protected Routes */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute allowedRoles={["student"]}>
+              <StudentDashboard />
+            </ProtectedRoute>
+          }
         />
-      )}
-      
-      {view === 'results' && examResult && (
-        <ResultsPage 
-          score={examResult.score} 
-          strikes={examResult.strikes} 
-          totalQuestions={examResult.totalQuestions} 
-          onBackToDashboard={handleBackToDashboard}
+
+        <Route
+          path="/lecturer"
+          element={
+            <ProtectedRoute allowedRoles={["lecturer"]}>
+              <LecturerDashboard />
+            </ProtectedRoute>
+          }
         />
-      )}
-      
-      <Toaster position="top-center" expand={true} richColors />
-    </div>
+
+        {/* Root Route - Smart Redirect */}
+        <Route path="/" element={<RootRedirect />} />
+
+        {/* Catch all */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Router>
   );
+}
+
+// Smart Redirect Component
+function RootRedirect() {
+  const [userRole, setUserRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    const role = localStorage.getItem("userRole"); // Replace with real auth later
+    setUserRole(role);
+  }, []);
+
+  if (!userRole) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return userRole === "lecturer" ? 
+    <Navigate to="/lecturer" replace /> : 
+    <Navigate to="/dashboard" replace />;
 }
 
 export default App;
