@@ -1,18 +1,23 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { SignedIn, SignedOut, RedirectToSignIn, useUser } from "@clerk/clerk-react";
 
+// Pages
+import Home from "./pages/Home";                    // Your original home page
+import Login from "./pages/Login";
 import StudentDashboard from "./pages/StudentDashboard";
 import LecturerDashboard from "./pages/LecturerDashboard";
-import Login from "./pages/Login";
 
 function App() {
   return (
     <Router>
       <Routes>
-        {/* Public Route */}
+        {/* Public Home Page */}
+        <Route path="/" element={<Home />} />
+
+        {/* Login Page */}
         <Route path="/login" element={<Login />} />
 
-        {/* Protected Student Route */}
+        {/* Protected Student Dashboard */}
         <Route
           path="/dashboard"
           element={
@@ -22,7 +27,7 @@ function App() {
           }
         />
 
-        {/* Protected Lecturer Route */}
+        {/* Protected Lecturer Dashboard */}
         <Route
           path="/lecturer"
           element={
@@ -32,24 +37,25 @@ function App() {
           }
         />
 
-        {/* Root Route - Smart Redirect */}
-        <Route path="/" element={<RootRedirect />} />
+        {/* Smart Root Redirect after Login */}
+        <Route path="/redirect" element={<RoleBasedRedirect />} />
 
-        {/* Catch-all */}
+        {/* Catch all unauthorized access */}
         <Route path="*" element={<RedirectToSignIn />} />
       </Routes>
     </Router>
   );
 }
 
-// Smart Redirect Component
-function RootRedirect() {
+// Role-Based Redirect after Login
+function RoleBasedRedirect() {
   const { isSignedIn, user } = useUser();
 
   if (!isSignedIn) {
     return <Navigate to="/login" replace />;
   }
 
+  // Get role from Clerk metadata (you can set this in Clerk dashboard)
   const role = (user?.publicMetadata?.role as string) || "student";
 
   return role === "lecturer" ? 
