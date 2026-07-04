@@ -53,9 +53,34 @@ function App() {
           </>
         } />
 
-        {/* Auth pages */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
+        {/* Auth pages: redirect away if already signed in, since Clerk
+            throws "Session already exists" if you try to sign in/up again */}
+        <Route
+          path="/login"
+          element={
+            <>
+              <SignedIn>
+                <RoleRedirect />
+              </SignedIn>
+              <SignedOut>
+                <Login />
+              </SignedOut>
+            </>
+          }
+        />
+        <Route
+          path="/signup"
+          element={
+            <>
+              <SignedIn>
+                <RoleRedirect />
+              </SignedIn>
+              <SignedOut>
+                <Signup />
+              </SignedOut>
+            </>
+          }
+        />
 
         {/* Student Dashboard */}
         <Route
