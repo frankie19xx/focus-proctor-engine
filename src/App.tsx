@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import { SignedIn, SignedOut, RedirectToSignIn, useUser } from "@clerk/clerk-react";
+import { SignedIn, SignedOut, RedirectToSignIn, useUser, useClerk } from "@clerk/clerk-react";
 import type { ReactElement } from "react";
+import { Button } from "@/components/ui/button";
 
 // Import your pages
 import Home from "./pages/Home";
@@ -19,6 +20,7 @@ function useRole(): { role: Role | undefined; isLoaded: boolean } {
 /** Sends a signed-in user to whichever dashboard matches their stored role. */
 function RoleRedirect() {
   const { role, isLoaded } = useRole();
+  const { signOut } = useClerk();
 
   // Clerk is still fetching the user record — don't decide anything yet,
   // or we risk redirecting based on a momentarily-empty role.
@@ -33,15 +35,19 @@ function RoleRedirect() {
   if (role === "lecturer") return <Navigate to="/lecturer" replace />;
   if (role === "student") return <Navigate to="/dashboard" replace />;
 
-  // Signed in but genuinely has no role set. Don't redirect to /login —
-  // that route also renders this component for signed-in users, which
-  // would create an infinite redirect loop. Show a real message instead.
+  // Signed in but genuinely has no role set (e.g. an old test account from
+  // before roles existed). Don't redirect to /login — that route also
+  // renders this component for signed-in users, which would loop. Give the
+  // person a way out instead.
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-center px-4">
       <p className="text-muted-foreground max-w-sm">
-        Your account doesn't have a role assigned yet. Please contact support
-        to finish setting up your account.
+        This account doesn't have a role assigned. Sign out and create a new
+        account as a Student or Lecturer.
       </p>
+      <Button variant="outline" onClick={() => signOut({ redirectUrl: "/" })}>
+        Sign out
+      </Button>
     </div>
   );
 }
