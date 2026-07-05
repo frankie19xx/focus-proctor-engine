@@ -88,8 +88,14 @@ export default function Signup() {
       }
 
       // Verification is required (this is the expected path when "Verify
-      // at sign-up" is turned on in the Clerk Dashboard). Send the code and
-      // move to the verification step.
+      // at sign-up" is turned on in the Clerk Dashboard). Re-assert
+      // metadata before sending the code, then send it.
+      await signUp.update({
+        unsafeMetadata:
+          role === "student"
+            ? { role, registrationNumber: registrationNumber.trim() }
+            : { role },
+      });
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
       setStep("verify");
     } catch (err) {
