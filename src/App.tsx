@@ -1,7 +1,8 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import { SignedIn, SignedOut, RedirectToSignIn, useUser, useClerk } from "@clerk/clerk-react";
 import type { ReactElement } from "react";
-import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
+import type { Role } from "@/types/profile";
+import { Toaster } from "@/components/ui/sonner";
 
 // Import your pages
 import Home from "./pages/Home";
@@ -9,148 +10,117 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import StudentDashboard from "./pages/StudentDashboard";
 import LecturerDashboard from "./pages/LecturerDashboard";
+import AdminDashboard from "./pages/AdminDashboard";
+import AwaitingApproval from "./pages/AwaitingApproval";
 
-type Role = "student" | "lecturer";
-
-function useRole(): { role: Role | undefined; isLoaded: boolean } {
-  const { user, isLoaded } = useUser();
-  return { role: user?.unsafeMetadata?.role as Role | undefined, isLoaded };
-}
-
-/** Sends a signed-in user to whichever dashboard matches their stored role. */
-function RoleRedirect() {
-  const { role, isLoaded } = useRole();
-  const { signOut } = useClerk();
-
-  // Clerk is still fetching the user record — don't decide anything yet,
-  // or we risk redirecting based on a momentarily-empty role.
-  if (!isLoaded) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
-        Loading...
-      </div>
-    );
-  }
-
-  if (role === "lecturer") return <Navigate to="/lecturer" replace />;
-  if (role === "student") return <Navigate to="/dashboard" replace />;
-
-  // Signed in but genuinely has no role set (e.g. an old test account from
-  // before roles existed). Don't redirect to /login — that route also
-  // renders this component for signed-in users, which would loop. Give the
-  // person a way out instead.
+function LoadingScreen() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-center px-4">
-      <p className="text-muted-foreground max-w-sm">
-        This account doesn't have a role assigned. Sign out and create a new
-        account as a Student or Lecturer.
-      </p>
-      <Button variant="outline" onClick={() => signOut({ redirectUrl: "/" })}>
-        Sign out
-      </Button>
+    <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+      Loading...
     </div>
   );
 }
 
-/** Only renders children if the signed-in user's role matches; otherwise redirects. */
+/** Where a signed-in, approved user belongs. */
+function homeRouteFor(role: Role): string {
+  if (role === "lecturer") return "/lecturer";
+  if (role === "admin") return "/admin";
+  return "/dashboard";
+}
+
+/**
+ * Sends a signed-in user wherever they belong right now:
+ * - no profile row yet (trigger hasn't caught up) -> wait
+ * - pending/rejected -> /awaiting-approval
+ * - approved -> their role's dashboard
+ */
+function RoleRedirect() {
+  const { profile } = useAuth();
+
+  if (!profile) return <LoadingScreen />;
+  if (profile.status !== "approved") return <Navigate to="/awaiting-approval" replace />;
+  return <Navigate to={homeRouteFor(profile.role)} replace />;
+}
+
+/** Only renders children for an approved user with a matching role. */
 function RequireRole({ role, children }: { role: Role; children: ReactElement }) {
-  const { role: actualRole, isLoaded } = useRole();
+  const { user, profile, loading } = useAuth();
 
-  if (!isLoaded) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
-        Loading...
-      </div>
-    );
-  }
+  if (loading) return <LoadingScreen />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!profile) return <LoadingScreen />;
+  if (profile.status !== "approved") return <Navigate to="/awaiting-approval" replace />;
+  if (profile.role !== role) return <Navigate to={homeRouteFor(profile.role)} replace />;
+  return children;
+}
 
-  if (actualRole !== role) {
-    return <Navigate to="/" replace />;
-  }
+/** The pending/rejected holding page. Approved users get bounced onward. */
+function RequireUnapproved({ children }: { children: ReactElement }) {
+  const { user, profile, loading } = useAuth();
+
+  if (loading) return <LoadingScreen />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!profile) return <LoadingScreen />;
+  if (profile.status === "approved") return <Navigate to={homeRouteFor(profile.role)} replace />;
+  return children;
+}
+
+/** Public pages (/, /login, /signup): signed-out users see them as-is,
+ * signed-in users get redirected to wherever they belong. */
+function PublicOnly({ children }: { children: ReactElement }) {
+  const { user, loading } = useAuth();
+
+  if (loading) return <LoadingScreen />;
+  if (user) return <RoleRedirect />;
   return children;
 }
 
 function App() {
   return (
     <Router>
+      <Toaster richColors position="top-right" />
       <Routes>
-        {/* Public landing page */}
-        <Route path="/" element={
-          <>
-            <SignedIn>
-              <RoleRedirect />
-            </SignedIn>
-            <SignedOut>
-              <Home />
-            </SignedOut>
-          </>
-        } />
+        <Route path="/" element={<PublicOnly><Home /></PublicOnly>} />
+        <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
+        <Route path="/signup" element={<PublicOnly><Signup /></PublicOnly>} />
 
-        {/* Auth pages: redirect away if already signed in, since Clerk
-            throws "Session already exists" if you try to sign in/up again */}
         <Route
-          path="/login"
+          path="/awaiting-approval"
           element={
-            <>
-              <SignedIn>
-                <RoleRedirect />
-              </SignedIn>
-              <SignedOut>
-                <Login />
-              </SignedOut>
-            </>
-          }
-        />
-        <Route
-          path="/signup"
-          element={
-            <>
-              <SignedIn>
-                <RoleRedirect />
-              </SignedIn>
-              <SignedOut>
-                <Signup />
-              </SignedOut>
-            </>
+            <RequireUnapproved>
+              <AwaitingApproval />
+            </RequireUnapproved>
           }
         />
 
-        {/* Student Dashboard */}
         <Route
           path="/dashboard"
           element={
-            <>
-              <SignedIn>
-                <RequireRole role="student">
-                  <StudentDashboard />
-                </RequireRole>
-              </SignedIn>
-              <SignedOut>
-                <RedirectToSignIn />
-              </SignedOut>
-            </>
+            <RequireRole role="student">
+              <StudentDashboard />
+            </RequireRole>
           }
         />
 
-        {/* Lecturer Dashboard */}
         <Route
           path="/lecturer"
           element={
-            <>
-              <SignedIn>
-                <RequireRole role="lecturer">
-                  <LecturerDashboard />
-                </RequireRole>
-              </SignedIn>
-              <SignedOut>
-                <RedirectToSignIn />
-              </SignedOut>
-            </>
+            <RequireRole role="lecturer">
+              <LecturerDashboard />
+            </RequireRole>
           }
         />
 
-        {/* Catch all unauthorized users */}
-        <Route path="*" element={<RedirectToSignIn />} />
+        <Route
+          path="/admin"
+          element={
+            <RequireRole role="admin">
+              <AdminDashboard />
+            </RequireRole>
+          }
+        />
+
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
   );
