@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { useSignIn } from "@clerk/clerk-react";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +18,7 @@ import { isValidEmail } from "@/lib/validators";
 type Role = "student" | "lecturer";
 
 export default function Login() {
-  const { isLoaded, signIn, setActive } = useSignIn();
+  const { signIn } = useAuth();
   const navigate = useNavigate();
 
   // Purely for UX (placeholder text, button label). The account that's
@@ -38,29 +38,19 @@ export default function Login() {
       setError("Please enter a valid email address.");
       return;
     }
-    if (!isLoaded) return;
 
     setSubmitting(true);
-    try {
-      const result = await signIn.create({
-        identifier: email,
-        password,
-      });
+    const { error: signInError } = await signIn(email, password);
+    setSubmitting(false);
 
-      if (result.status !== "complete") {
-        setError("Additional verification is required for this account. Please contact support.");
-        return;
-      }
-
-      await setActive({ session: result.createdSessionId });
-      navigate("/", { replace: true });
-    } catch (err) {
-      const clerkMessage =
-        (err as { errors?: { message?: string }[] })?.errors?.[0]?.message;
-      setError(clerkMessage || "Couldn't sign you in. Check your email and password.");
-    } finally {
-      setSubmitting(false);
+    if (signInError) {
+      setError(signInError || "Couldn't sign you in. Check your email and password.");
+      return;
     }
+
+    // App.tsx's routing takes over from here based on the freshly-loaded
+    // session and profile (pending -> awaiting approval, approved -> dashboard).
+    navigate("/", { replace: true });
   };
 
   return (
@@ -107,9 +97,7 @@ export default function Login() {
               </Alert>
             )}
 
-            <div id="clerk-captcha" />
-
-            <Button type="submit" className="w-full" disabled={submitting || !isLoaded}>
+            <Button type="submit" className="w-full" disabled={submitting}>
               {submitting ? "Signing in..." : `Log in as ${role === "student" ? "Student" : "Lecturer"}`}
             </Button>
           </form>
