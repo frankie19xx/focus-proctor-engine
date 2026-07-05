@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { useSignUp } from "@clerk/clerk-react";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,19 +16,16 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { isEduEmail, isValidRegistrationNumber, isValidEmail } from "@/lib/validators";
 
 type Role = "student" | "lecturer";
-type Step = "form" | "verify";
 
 export default function Signup() {
-  const { isLoaded, signUp, setActive } = useSignUp();
+  const { signUp } = useAuth();
   const navigate = useNavigate();
 
-  const [step, setStep] = useState<Step>("form");
   const [role, setRole] = useState<Role>("student");
   const [email, setEmail] = useState("");
   const [registrationNumber, setRegistrationNumber] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -66,137 +63,32 @@ export default function Signup() {
       return;
     }
 
-    if (!isLoaded) return;
-
     setSubmitting(true);
-    try {
-      const result = await signUp.create({
-        emailAddress: email,
-        password,
-        unsafeMetadata:
-          role === "student"
-            ? { role, registrationNumber: registrationNumber.trim() }
-            : { role },
-      });
+    const { error: signUpError, needsEmailConfirmation } = await signUp(email, password, {
+      role,
+      registrationNumber: role === "student" ? registrationNumber.trim() : undefined,
+    });
+    setSubmitting(false);
 
-      if (result.status === "complete") {
-        // Email verification is off for this Clerk instance — account is
-        // ready immediately, no code needed.
-        await setActive({ session: result.createdSessionId });
-        navigate("/", { replace: true });
-        return;
-      }
-
-      // Verification is required (this is the expected path when "Verify
-      // at sign-up" is turned on in the Clerk Dashboard). Re-assert
-      // metadata before sending the code, then send it.
-      await signUp.update({
-        unsafeMetadata:
-          role === "student"
-            ? { role, registrationNumber: registrationNumber.trim() }
-            : { role },
-      });
-      await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
-      setStep("verify");
-    } catch (err) {
-      const clerkMessage =
-        (err as { errors?: { message?: string }[] })?.errors?.[0]?.message;
-      setError(clerkMessage || "Something went wrong creating your account. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleVerify = async (e: FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    if (!isLoaded) return;
-    if (!code.trim()) {
-      setError("Enter the code we emailed you.");
+    if (signUpError) {
+      setError(signUpError);
       return;
     }
 
-    setSubmitting(true);
-    try {
-      const result = await signUp.attemptEmailAddressVerification({ code: code.trim() });
-
-      if (result.status !== "complete") {
-        setError("That code didn't work. Double-check it and try again.");
-        return;
-      }
-
-      await setActive({ session: result.createdSessionId });
-      navigate("/", { replace: true });
-    } catch (err) {
-      const clerkMessage =
-        (err as { errors?: { message?: string }[] })?.errors?.[0]?.message;
-      setError(clerkMessage || "That code didn't work. Double-check it and try again.");
-    } finally {
-      setSubmitting(false);
+    if (needsEmailConfirmation) {
+      // Email confirmation is turned on in the Supabase dashboard for this
+      // project. There's no session yet, so App.tsx's routing can't take
+      // over — send the person to the same holding page with an explicit
+      // "confirm your email first" message via query state.
+      navigate("/awaiting-approval", { replace: true, state: { needsEmailConfirmation: true, email } });
+      return;
     }
+
+    // Signed in immediately; the new profile row is status = 'pending' by
+    // default, so App.tsx's routing will land the person on
+    // /awaiting-approval on its own.
+    navigate("/", { replace: true });
   };
-
-  const handleResendCode = async () => {
-    setError(null);
-    if (!isLoaded) return;
-    try {
-      await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
-      setError("A new code was sent to your email.");
-    } catch {
-      setError("Couldn't resend the code. Please try again in a moment.");
-    }
-  };
-
-  if (step === "verify") {
-    return (
-      <div className="min-h-screen flex items-center justify-center px-4 bg-background">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Check your email</CardTitle>
-            <CardDescription>
-              We sent a verification code to <span className="font-medium">{email}</span>.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleVerify} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="code">Verification code</Label>
-                <Input
-                  id="code"
-                  type="text"
-                  inputMode="numeric"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  placeholder="123456"
-                  autoFocus
-                  required
-                />
-              </div>
-
-              {error && (
-                <Alert variant={error.startsWith("A new code") ? "default" : "destructive"}>
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
-              <Button type="submit" className="w-full" disabled={submitting || !isLoaded}>
-                {submitting ? "Verifying..." : "Verify and continue"}
-              </Button>
-
-              <button
-                type="button"
-                onClick={handleResendCode}
-                className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground w-full text-center"
-              >
-                Resend code
-              </button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-background">
@@ -287,10 +179,7 @@ export default function Signup() {
                 </Alert>
               )}
 
-              {/* Clerk requires this element to exist for bot protection (CAPTCHA) */}
-              <div id="clerk-captcha" />
-
-              <Button type="submit" className="w-full" disabled={submitting || !isLoaded}>
+              <Button type="submit" className="w-full" disabled={submitting}>
                 {submitting ? "Creating account..." : `Sign up as ${role === "student" ? "Student" : "Lecturer"}`}
               </Button>
             </form>
