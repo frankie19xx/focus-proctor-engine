@@ -30,16 +30,17 @@ const MOCK_EXAMS: Exam[] = [
 ];
 
 interface DashboardProps {
+  studentName?: string;
   onStartExam: (exam: Exam) => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ onStartExam }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ studentName, onStartExam }) => {
   return (
     <div className="container mx-auto py-10 px-4">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold">Student Dashboard</h1>
-          <p className="text-muted-foreground text-lg">Welcome back, John Doe. Choose an exam to begin.</p>
+          <p className="text-muted-foreground text-lg">Welcome back{studentName ? `, ${studentName}` : ""}. Choose an exam to begin.</p>
         </div>
         <div className="hidden md:flex gap-4">
           <Card className="px-4 py-2 flex items-center gap-2">

@@ -1,15 +1,6 @@
 // Validation rules for role-specific signup requirements.
 
 /**
- * Lecturer emails must end in ".edu" — a strong, non-negotiable requirement.
- * Matches e.g. "j.smith@university.edu" but rejects "j.smith@university.edu.co"
- * or "j.smith@gmail.com".
- */
-export function isEduEmail(email: string): boolean {
-  return /^[^\s@]+@([a-zA-Z0-9-]+\.)+edu$/.test(email.trim());
-}
-
-/**
  * Student registration numbers must contain at least one letter AND at least
  * one digit (e.g. "CS/2021/034", "ENG2022017"). Plain words or plain numbers
  * are rejected.

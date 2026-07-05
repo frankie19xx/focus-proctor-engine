@@ -12,6 +12,7 @@ import StudentDashboard from "./pages/StudentDashboard";
 import LecturerDashboard from "./pages/LecturerDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import AwaitingApproval from "./pages/AwaitingApproval";
+import ForgotPassword from "./pages/ForgotPassword";
 
 function LoadingScreen() {
   return (
@@ -83,6 +84,7 @@ function App() {
         <Route path="/" element={<PublicOnly><Home /></PublicOnly>} />
         <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
         <Route path="/signup" element={<PublicOnly><Signup /></PublicOnly>} />
+        <Route path="/forgot-password" element={<PublicOnly><ForgotPassword /></PublicOnly>} />
 
         <Route
           path="/awaiting-approval"

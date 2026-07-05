@@ -13,7 +13,8 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { isEduEmail, isValidRegistrationNumber, isValidEmail } from "@/lib/validators";
+import { Eye, EyeOff } from "lucide-react";
+import { isValidRegistrationNumber, isValidEmail } from "@/lib/validators";
 
 type Role = "student" | "lecturer";
 
@@ -26,6 +27,8 @@ export default function Signup() {
   const [registrationNumber, setRegistrationNumber] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -37,9 +40,6 @@ export default function Signup() {
   const validate = (): string | null => {
     if (!isValidEmail(email)) {
       return "Please enter a valid email address.";
-    }
-    if (role === "lecturer" && !isEduEmail(email)) {
-      return "Lecturer accounts must be created with an email ending in \".edu\".";
     }
     if (role === "student" && !isValidRegistrationNumber(registrationNumber)) {
       return "Registration number must contain both letters and numbers (e.g. CS/2021/034).";
@@ -76,17 +76,10 @@ export default function Signup() {
     }
 
     if (needsEmailConfirmation) {
-      // Email confirmation is turned on in the Supabase dashboard for this
-      // project. There's no session yet, so App.tsx's routing can't take
-      // over — send the person to the same holding page with an explicit
-      // "confirm your email first" message via query state.
       navigate("/awaiting-approval", { replace: true, state: { needsEmailConfirmation: true, email } });
       return;
     }
 
-    // Signed in immediately; the new profile row is status = 'pending' by
-    // default, so App.tsx's routing will land the person on
-    // /awaiting-approval on its own.
     navigate("/", { replace: true });
   };
 
@@ -135,42 +128,57 @@ export default function Signup() {
 
               <TabsContent value="lecturer" className="space-y-4 mt-0">
                 <div className="space-y-2">
-                  <Label htmlFor="lecturer-email">Institutional Email</Label>
+                  <Label htmlFor="lecturer-email">Email</Label>
                   <Input
                     id="lecturer-email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@university.edu"
+                    placeholder="you@example.com"
                     required
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Must end in ".edu" — personal or generic emails aren't accepted.
-                  </p>
                 </div>
               </TabsContent>
 
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={8}
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={8}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirm-password">Confirm Password</Label>
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  minLength={8}
-                />
+                <div className="relative">
+                  <Input
+                    id="confirm-password"
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    minLength={8}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
 
               {error && (

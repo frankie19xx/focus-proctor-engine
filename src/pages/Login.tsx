@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Eye, EyeOff } from "lucide-react";
 import { isValidEmail } from "@/lib/validators";
 
 type Role = "student" | "lecturer";
@@ -21,12 +22,10 @@ export default function Login() {
   const { signIn } = useAuth();
   const navigate = useNavigate();
 
-  // Purely for UX (placeholder text, button label). The account that's
-  // actually signed in always determines which dashboard the user lands on
-  // — see the RoleRedirect logic in App.tsx.
   const [role, setRole] = useState<Role>("student");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -48,8 +47,6 @@ export default function Login() {
       return;
     }
 
-    // App.tsx's routing takes over from here based on the freshly-loaded
-    // session and profile (pending -> awaiting approval, approved -> dashboard).
     navigate("/", { replace: true });
   };
 
@@ -76,19 +73,28 @@ export default function Login() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder={role === "lecturer" ? "you@university.edu" : "you@example.com"}
+                placeholder="you@example.com"
                 required
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
             {error && (
@@ -102,12 +108,17 @@ export default function Login() {
             </Button>
           </form>
 
-          <p className="text-sm text-muted-foreground text-center mt-6">
-            Don't have an account?{" "}
-            <Link to="/signup" className="underline underline-offset-4 hover:text-foreground">
-              Sign up
+          <div className="mt-6 space-y-3 text-sm text-center">
+            <Link to="/forgot-password" className="block text-muted-foreground underline underline-offset-4 hover:text-foreground">
+              Forgot your password?
             </Link>
-          </p>
+            <p className="text-muted-foreground">
+              Don't have an account?{" "}
+              <Link to="/signup" className="underline underline-offset-4 hover:text-foreground">
+                Sign up
+              </Link>
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>
