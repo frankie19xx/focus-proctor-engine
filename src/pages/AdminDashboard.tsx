@@ -110,8 +110,8 @@ export default function AdminDashboard() {
                     )}
                   </div>
 
-                  {tab === "pending" && (
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    {tab !== "rejected" && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -119,14 +119,16 @@ export default function AdminDashboard() {
                         onClick={() => decide(p.id, "rejected")}
                       >
                         <X className="h-4 w-4 mr-1" />
-                        Reject
+                        {tab === "approved" ? "Revoke" : "Reject"}
                       </Button>
+                    )}
+                    {tab !== "approved" && (
                       <Button size="sm" disabled={actingOn === p.id} onClick={() => decide(p.id, "approved")}>
                         <Check className="h-4 w-4 mr-1" />
-                        Approve
+                        {tab === "rejected" ? "Reinstate" : "Approve"}
                       </Button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
