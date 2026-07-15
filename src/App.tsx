@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import type { ReactElement } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Role } from "@/types/profile";
@@ -13,6 +13,7 @@ import LecturerDashboard from "./pages/LecturerDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import AwaitingApproval from "./pages/AwaitingApproval";
 import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 
 function LoadingScreen() {
   return (
@@ -66,6 +67,28 @@ function RequireUnapproved({ children }: { children: ReactElement }) {
   return children;
 }
 
+/** Only the tail end of a password-recovery email link should render this. */
+function RequireRecoverySession({ children }: { children: ReactElement }) {
+  const { loading, isPasswordRecovery } = useAuth();
+
+  if (loading) return <LoadingScreen />;
+  if (!isPasswordRecovery) return <Navigate to="/login" replace />;
+  return children;
+}
+
+/** While a recovery session is active, keep the user on /reset-password no
+ * matter what URL they land on or click toward — this is the fix for the
+ * old bug where a recovery link fell through to the normal dashboard
+ * redirect instead of prompting for a new password. */
+function RecoveryGate({ children }: { children: ReactElement }) {
+  const { isPasswordRecovery } = useAuth();
+  const location = useLocation();
+
+  if (isPasswordRecovery && location.pathname !== "/reset-password") {
+    return <Navigate to="/reset-password" replace />;
+  }
+  return children;
+}
 /** Public pages (/, /login, /signup): signed-out users see them as-is,
  * signed-in users get redirected to wherever they belong. */
 function PublicOnly({ children }: { children: ReactElement }) {
@@ -80,50 +103,61 @@ function App() {
   return (
     <Router>
       <Toaster richColors position="top-right" />
-      <Routes>
-        <Route path="/" element={<PublicOnly><Home /></PublicOnly>} />
-        <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
-        <Route path="/signup" element={<PublicOnly><Signup /></PublicOnly>} />
-        <Route path="/forgot-password" element={<PublicOnly><ForgotPassword /></PublicOnly>} />
+      <RecoveryGate>
+        <Routes>
+          <Route path="/" element={<PublicOnly><Home /></PublicOnly>} />
+          <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
+          <Route path="/signup" element={<PublicOnly><Signup /></PublicOnly>} />
+          <Route path="/forgot-password" element={<PublicOnly><ForgotPassword /></PublicOnly>} />
 
-        <Route
-          path="/awaiting-approval"
-          element={
-            <RequireUnapproved>
-              <AwaitingApproval />
-            </RequireUnapproved>
-          }
-        />
+          <Route
+            path="/reset-password"
+            element={
+              <RequireRecoverySession>
+                <ResetPassword />
+              </RequireRecoverySession>
+            }
+          />
 
-        <Route
-          path="/dashboard"
-          element={
-            <RequireRole role="student">
-              <StudentDashboard />
-            </RequireRole>
-          }
-        />
+          <Route
+            path="/awaiting-approval"
+            element={
+              <RequireUnapproved>
+                <AwaitingApproval />
+              </RequireUnapproved>
+            }
+          />
 
-        <Route
-          path="/lecturer"
-          element={
-            <RequireRole role="lecturer">
-              <LecturerDashboard />
-            </RequireRole>
-          }
-        />
+          <Route
+            path="/dashboard"
+            element={
+              <RequireRole role="student">
+                <StudentDashboard />
+              </RequireRole>
+            }
+          />
 
-        <Route
-          path="/admin"
-          element={
-            <RequireRole role="admin">
-              <AdminDashboard />
-            </RequireRole>
-          }
-        />
+          <Route
+            path="/lecturer"
+            element={
+              <RequireRole role="lecturer">
+                <LecturerDashboard />
+              </RequireRole>
+            }
+          />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          <Route
+            path="/admin"
+            element={
+              <RequireRole role="admin">
+                <AdminDashboard />
+              </RequireRole>
+            }
+          />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </RecoveryGate>
     </Router>
   );
 }
