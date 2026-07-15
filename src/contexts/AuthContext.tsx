@@ -14,10 +14,17 @@ interface AuthContextValue {
   profile: Profile | null;
   // True until we've resolved the initial session AND (if signed in) the profile row.
   loading: boolean;
+  // True from the moment a password-recovery link is opened until the user
+  // finishes (or abandons) setting a new password. Used to keep a recovery
+  // session pinned to /reset-password instead of falling through to a
+  // normal dashboard redirect.
+  isPasswordRecovery: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, details: SignUpDetails) => Promise<{ error: string | null; needsEmailConfirmation: boolean }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  updatePassword: (password: string) => Promise<{ error: string | null }>;
+  clearPasswordRecovery: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -27,6 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [sessionLoaded, setSessionLoaded] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   const fetchProfile = useCallback(async (userId: string) => {
     setProfileLoading(true);
@@ -56,8 +64,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
+      // Fired specifically when the session came from a password-recovery
+      // link, as opposed to a normal sign-in. Distinguishing this is the
+      // whole reason /reset-password can tell "came from the email link"
+      // apart from "already logged in and browsed here".
+      if (event === "PASSWORD_RECOVERY") {
+        setIsPasswordRecovery(true);
+      }
       if (newSession?.user) {
         fetchProfile(newSession.user.id);
       } else {
@@ -95,11 +110,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    setIsPasswordRecovery(false);
   };
 
   const refreshProfile = async () => {
     if (session?.user) await fetchProfile(session.user.id);
   };
+
+  const updatePassword = async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    return { error: error?.message ?? null };
+  };
+
+  const clearPasswordRecovery = () => setIsPasswordRecovery(false);
 
   const loading = !sessionLoaded || (!!session?.user && profileLoading && !profile);
 
@@ -110,10 +133,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user: session?.user ?? null,
         profile,
         loading,
+        isPasswordRecovery,
         signIn,
         signUp,
         signOut,
         refreshProfile,
+        updatePassword,
+        clearPasswordRecovery,
       }}
     >
       {children}
