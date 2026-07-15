@@ -1,29 +1,27 @@
-import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { ShieldCheck } from "lucide-react";
+import { Navbar } from "@/components/home/Navbar";
+import { Hero } from "@/components/home/Hero";
+import { About } from "@/components/home/About";
+import { Features } from "@/components/home/Features";
+import { HowItWorks } from "@/components/home/HowItWorks";
+import { Stats } from "@/components/home/Stats";
+import { Faqs } from "@/components/home/Faqs";
+import { Contact } from "@/components/home/Contact";
+import { Footer } from "@/components/home/Footer";
 
 export default function Home() {
-  const navigate = useNavigate();
-
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 text-center bg-background">
-      <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
-        <ShieldCheck className="h-8 w-8 text-primary" />
-      </div>
-
-      <h1 className="text-4xl font-bold tracking-tight mb-3">ExamGuard</h1>
-      <p className="text-muted-foreground max-w-md mb-8">
-        Focused, fair, and secure online exams for students and lecturers.
-      </p>
-
-      <div className="flex flex-col sm:flex-row gap-3">
-        <Button size="lg" onClick={() => navigate("/login")}>
-          Log In
-        </Button>
-        <Button size="lg" variant="outline" onClick={() => navigate("/signup")}>
-          Create Account
-        </Button>
-      </div>
+    <div className="min-h-screen bg-background text-foreground">
+      <Navbar />
+      <main>
+        <Hero />
+        <About />
+        <Features />
+        <HowItWorks />
+        <Stats />
+        <Faqs />
+        <Contact />
+      </main>
+      <Footer />
     </div>
   );
 }
