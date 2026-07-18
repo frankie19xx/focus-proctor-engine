@@ -4,7 +4,18 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { Exam, Result, CheatingLog } from "@/types/exam";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Circle, ShieldAlert, Timer } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Circle, ShieldAlert, Timer, OctagonX } from "lucide-react";
 import { toast } from "sonner";
 
 interface ProfileLite {
@@ -30,6 +41,8 @@ export function LiveMonitoringTab() {
   const [recentViolations, setRecentViolations] = useState<CheatingLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [, forceTick] = useState(0);
+  const [stopTarget, setStopTarget] = useState<Result | null>(null);
+  const [stopping, setStopping] = useState(false);
   const examIdsRef = useRef<string[]>([]);
 
   const fetchProfilesFor = useCallback(async (ids: string[]) => {
@@ -107,6 +120,27 @@ export function LiveMonitoringTab() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const confirmStopExam = async () => {
+    if (!stopTarget) return;
+    setStopping(true);
+
+    const { error } = await supabase
+      .from("results")
+      .update({ status: "auto_submitted", completed_at: new Date().toISOString() })
+      .eq("id", stopTarget.id);
+
+    setStopping(false);
+
+    if (error) {
+      toast.error("Couldn't stop this exam", { description: error.message });
+      return;
+    }
+
+    toast.success("Exam stopped for this student");
+    setAttempts((prev) => prev.filter((a) => a.id !== stopTarget.id));
+    setStopTarget(null);
+  };
 
   // Tick every second so elapsed-time labels stay live.
   useEffect(() => {
@@ -208,9 +242,19 @@ export function LiveMonitoringTab() {
                       </div>
                       <p className="text-sm text-muted-foreground">{exam?.title ?? "Unknown exam"}</p>
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Timer className="w-4 h-4" />
-                      {formatElapsed(a.started_at)}
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Timer className="w-4 h-4" />
+                        {formatElapsed(a.started_at)}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => setStopTarget(a)}
+                      >
+                        <OctagonX className="w-3.5 h-3.5 mr-1" /> Stop Exam
+                      </Button>
                     </div>
                   </div>
                 );
@@ -255,6 +299,37 @@ export function LiveMonitoringTab() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!stopTarget} onOpenChange={(open) => !open && setStopTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Stop this student's exam?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {stopTarget && (
+                <>
+                  This immediately ends{" "}
+                  <strong>
+                    {profiles[stopTarget.student_id]?.full_name ||
+                      profiles[stopTarget.student_id]?.email ||
+                      "this student"}
+                  </strong>
+                  's attempt at{" "}
+                  <strong>{exams.find((e) => e.id === stopTarget.exam_id)?.title ?? "this exam"}</strong>
+                  . It's marked as auto-submitted and scored from whatever they'd answered so far
+                  if their browser is still connected — otherwise unanswered questions count as
+                  incorrect. This can't be undone.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={stopping}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmStopExam} disabled={stopping}>
+              {stopping ? "Stopping…" : "Stop Exam"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

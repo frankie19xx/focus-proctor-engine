@@ -27,10 +27,18 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ examId, examTitle,
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [finished, setFinished] = useState(false);
+  const [resultId, setResultId] = useState<string | null>(null);
 
   const resultIdRef = useRef<string | null>(null);
   const questionsRef = useRef<Question[]>([]);
   const answersRef = useRef<Record<number, string>>({});
+  const finishedRef = useRef(false);
+  const strikesRef = useRef(0);
+  // Tracks which exam we've already opened an attempt for, so this effect
+  // can safely re-run (e.g. when Supabase refreshes the session/user object
+  // on tab refocus) without inserting a second `results` row and orphaning
+  // the first one as permanently "in_progress".
+  const startedForExamRef = useRef<string | null>(null);
 
   useEffect(() => {
     questionsRef.current = questions;
@@ -42,6 +50,8 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ examId, examTitle,
   // Load questions and open an in-progress result row to track this attempt.
   useEffect(() => {
     if (!user) return;
+    if (startedForExamRef.current === examId) return;
+    startedForExamRef.current = examId;
     let cancelled = false;
 
     (async () => {
@@ -78,6 +88,7 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ examId, examTitle,
 
       if (cancelled) return;
       resultIdRef.current = resultRow.id as string;
+      setResultId(resultRow.id as string);
       setQuestions(questionData as Question[]);
       setLoading(false);
     })();
@@ -85,10 +96,16 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ examId, examTitle,
     return () => {
       cancelled = true;
     };
-  }, [examId, user]);
+    // Deliberately depend on user?.id (a stable primitive) rather than the
+    // `user` object, which Supabase gives a new identity on every auth
+    // event — including the silent session refresh it performs when the
+    // tab regains focus after a visibility-change violation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [examId, user?.id]);
 
   const finishExam = async (currentStrikes: number, status: ResultStatus = 'completed') => {
-    if (finished) return;
+    if (finishedRef.current) return;
+    finishedRef.current = true;
     setFinished(true);
 
     const qs = questionsRef.current;
@@ -117,6 +134,14 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ examId, examTitle,
     onFinish({ score, strikes: currentStrikes, totalQuestions: qs.length });
   };
 
+  // Kept up to date every render so the realtime listener below (whose own
+  // effect only re-runs when resultId changes) always calls the freshest
+  // version rather than one captured from an earlier render.
+  const finishExamRef = useRef(finishExam);
+  useEffect(() => {
+    finishExamRef.current = finishExam;
+  });
+
   const { strikes } = useAntiCheating({
     maxStrikes: 3,
     enabled: !loading && !finished,
@@ -133,6 +158,37 @@ export const ExamInterface: React.FC<ExamInterfaceProps> = ({ examId, examTitle,
       });
     },
   });
+
+  useEffect(() => {
+    strikesRef.current = strikes;
+  }, [strikes]);
+
+  // Listen for the lecturer forcibly ending this attempt from the Live
+  // Monitoring tab. When that happens we finish locally too — scoring
+  // whatever was answered so far — rather than leaving the student stuck
+  // on an exam the server has already closed out.
+  useEffect(() => {
+    if (!resultId) return;
+
+    const channel = supabase
+      .channel(`exam-attempt-${resultId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'results', filter: `id=eq.${resultId}` },
+        (payload) => {
+          const updated = payload.new as { status: ResultStatus };
+          if (updated.status !== 'in_progress' && !finishedRef.current) {
+            toast.warning('This exam was ended by your lecturer.');
+            finishExamRef.current(strikesRef.current, updated.status);
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [resultId]);
 
   if (loading) {
     return (
