@@ -18,8 +18,9 @@ import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Trash2, PlusCircle, GripVertical } from "lucide-react";
+import { Trash2, PlusCircle, GripVertical, Upload, Download } from "lucide-react";
 import { toast } from "sonner";
+import { parseExamQuestionsCsv } from "@/lib/csv";
 
 interface DraftQuestion {
   // Local id for React keys / DB id if it already exists.
@@ -142,6 +143,60 @@ export function ExamFormDialog({ open, onOpenChange, exam, onSaved }: ExamFormDi
   };
 
   const addQuestion = () => setQuestions((prev) => [...prev, emptyQuestion()]);
+
+  const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+
+    const text = await file.text();
+    const { questions: parsed, errors } = parseExamQuestionsCsv(text);
+
+    if (parsed.length > 0) {
+      const imported: DraftQuestion[] = parsed.map((q) => ({
+        key: crypto.randomUUID(),
+        question_text: q.question_text,
+        options: q.options,
+        correct_answer: q.correct_answer,
+        points: q.points,
+      }));
+
+      setQuestions((prev) => {
+        // Drop a single leftover blank placeholder question rather than
+        // leaving it dangling above the imported set.
+        const base =
+          prev.length === 1 && !prev[0].question_text.trim() && !prev[0].correct_answer
+            ? []
+            : prev;
+        return [...base, ...imported];
+      });
+
+      toast.success(`Imported ${parsed.length} question${parsed.length === 1 ? "" : "s"} from CSV`);
+    }
+
+    if (errors.length > 0) {
+      toast.warning(
+        parsed.length > 0
+          ? `Imported with ${errors.length} row(s) skipped`
+          : "Couldn't import questions",
+        { description: errors.slice(0, 3).join(" ") },
+      );
+    }
+  };
+
+  const downloadCsvTemplate = () => {
+    const template =
+      "question,option_a,option_b,option_c,option_d,correct_answer,points\n" +
+      '"What does HTML stand for?","Hyper Text Markup Language","Home Tool Markup Language","Hyperlinks Text Markup Language","Hyper Tool Markup Language",A,1\n' +
+      '"Which CSS property changes text color?","font-color","text-color","color","background-color",C,1\n';
+    const blob = new Blob([template], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "exam-questions-template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
   const removeQuestion = (key: string) =>
     setQuestions((prev) => (prev.length > 1 ? prev.filter((q) => q.key !== key) : prev));
 
@@ -289,12 +344,33 @@ export function ExamFormDialog({ open, onOpenChange, exam, onSaved }: ExamFormDi
               <Separator />
 
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <h3 className="font-semibold">Questions ({questions.length})</h3>
-                  <Button type="button" variant="outline" size="sm" onClick={addQuestion}>
-                    <PlusCircle className="w-4 h-4 mr-1" /> Add Question
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button type="button" variant="ghost" size="sm" onClick={downloadCsvTemplate}>
+                      <Download className="w-4 h-4 mr-1" /> Template
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" asChild>
+                      <label className="cursor-pointer">
+                        <Upload className="w-4 h-4 mr-1" /> Upload CSV
+                        <input
+                          type="file"
+                          accept=".csv,text/csv"
+                          className="hidden"
+                          onChange={handleCsvUpload}
+                        />
+                      </label>
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={addQuestion}>
+                      <PlusCircle className="w-4 h-4 mr-1" /> Add Question
+                    </Button>
+                  </div>
                 </div>
+                <p className="text-xs text-muted-foreground -mt-2">
+                  Upload a CSV of questions instead of typing them in one by one — download the
+                  template to see the expected columns. Imported questions appear below for you
+                  to review before saving.
+                </p>
 
                 {questions.map((q, qIdx) => (
                   <div key={q.key} className="border rounded-lg p-4 space-y-3 bg-muted/20">
