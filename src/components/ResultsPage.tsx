@@ -9,10 +9,12 @@ interface ResultsPageProps {
   strikes: number;
   totalQuestions: number;
   onBackToDashboard: () => void;
+  examTitle?: string;
+  completedAt?: string;
 }
 
-export const ResultsPage: React.FC<ResultsPageProps> = ({ score, strikes, totalQuestions, onBackToDashboard }) => {
-  const percentage = (score / totalQuestions) * 100;
+export const ResultsPage: React.FC<ResultsPageProps> = ({ score, strikes, totalQuestions, onBackToDashboard, examTitle, completedAt }) => {
+  const percentage = totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0;
   
   return (
     <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
@@ -22,7 +24,14 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({ score, strikes, totalQ
             <Trophy className="h-12 w-12 text-primary" />
           </div>
           <CardTitle className="text-3xl font-bold">Exam Completed!</CardTitle>
-          <p className="text-muted-foreground">Your performance summary is ready.</p>
+          <p className="text-muted-foreground">
+            {examTitle ? `Results for ${examTitle}` : "Your performance summary is ready."}
+          </p>
+          {completedAt && (
+            <p className="text-xs text-muted-foreground">
+              Submitted {new Date(completedAt).toLocaleString()}
+            </p>
+          )}
         </CardHeader>
         <CardContent className="space-y-8 p-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

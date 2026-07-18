@@ -17,6 +17,13 @@ export interface ExamForStudent {
   questions: number;
 }
 
+export interface CompletedResultLite {
+  score: number;
+  strikes: number;
+  total_questions: number;
+  completed_at: string;
+}
+
 interface StudentStats {
   completed_exams: number;
   pending_exams: number;
@@ -26,12 +33,13 @@ interface StudentStats {
 interface DashboardProps {
   studentName?: string;
   onStartExam: (exam: ExamForStudent) => void;
+  onViewResult: (exam: ExamForStudent, result: CompletedResultLite) => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ studentName, onStartExam }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ studentName, onStartExam, onViewResult }) => {
   const { user } = useAuth();
   const [exams, setExams] = useState<DbExam[]>([]);
-  const [completedExamIds, setCompletedExamIds] = useState<Set<string>>(new Set());
+  const [completedResults, setCompletedResults] = useState<Record<string, CompletedResultLite>>({});
   const [stats, setStats] = useState<StudentStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -55,11 +63,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ studentName, onStartExam }
 
     const { data: resultData } = await supabase
       .from('results')
-      .select('exam_id')
+      .select('exam_id, score, strikes, total_questions, completed_at')
       .eq('student_id', user.id)
-      .eq('status', 'completed');
+      .eq('status', 'completed')
+      .order('completed_at', { ascending: true });
 
-    setCompletedExamIds(new Set((resultData ?? []).map((r) => r.exam_id as string)));
+    // Keep the most recent completed attempt per exam (rows are ordered
+    // oldest-first above, so later entries simply overwrite earlier ones).
+    const latestByExam: Record<string, CompletedResultLite> = {};
+    for (const r of resultData ?? []) {
+      latestByExam[r.exam_id as string] = {
+        score: r.score as number,
+        strikes: r.strikes as number,
+        total_questions: r.total_questions as number,
+        completed_at: r.completed_at as string,
+      };
+    }
+    setCompletedResults(latestByExam);
 
     const { data: statsData } = await supabase.rpc('get_student_stats', {
       p_student_id: user.id,
@@ -73,7 +93,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ studentName, onStartExam }
     load();
   }, [load]);
 
-  const pendingCount = exams.filter((e) => !completedExamIds.has(e.id)).length;
+  const pendingCount = exams.filter((e) => !(e.id in completedResults)).length;
 
   return (
     <div className="container mx-auto py-10 px-4">
@@ -118,7 +138,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ studentName, onStartExam }
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
           {exams.map((exam) => {
-            const completed = completedExamIds.has(exam.id);
+            const result = completedResults[exam.id];
+            const completed = !!result;
+            const examForStudent: ExamForStudent = {
+              id: exam.id,
+              title: exam.title,
+              description: exam.description ?? '',
+              duration: exam.duration_minutes,
+              questions: exam.total_questions,
+            };
             return (
               <Card key={exam.id} className="flex flex-col">
                 <CardHeader>
@@ -147,26 +175,28 @@ export const Dashboard: React.FC<DashboardProps> = ({ studentName, onStartExam }
                     </div>
                   </div>
                 </CardContent>
-                <CardFooter className="pt-0">
+                <CardFooter className="pt-0 flex gap-2">
+                  {completed && (
+                    <Button
+                      className="flex-1"
+                      size="lg"
+                      variant="outline"
+                      onClick={() => onViewResult(examForStudent, result)}
+                    >
+                      View Result
+                    </Button>
+                  )}
                   <Button
-                    className="w-full"
+                    className="flex-1"
                     size="lg"
                     variant={completed ? "outline" : "default"}
                     disabled={exam.total_questions === 0}
-                    onClick={() =>
-                      onStartExam({
-                        id: exam.id,
-                        title: exam.title,
-                        description: exam.description ?? '',
-                        duration: exam.duration_minutes,
-                        questions: exam.total_questions,
-                      })
-                    }
+                    onClick={() => onStartExam(examForStudent)}
                   >
                     {exam.total_questions === 0
                       ? 'No questions yet'
                       : completed
-                      ? 'Retake Examination'
+                      ? 'Retake'
                       : 'Start Examination'}
                   </Button>
                 </CardFooter>

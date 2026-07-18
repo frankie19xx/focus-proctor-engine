@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { Dashboard, type ExamForStudent } from "@/components/Dashboard";
+import { Dashboard, type ExamForStudent, type CompletedResultLite } from "@/components/Dashboard";
 import { ExamInterface } from "@/components/ExamInterface";
 import { ResultsPage } from "@/components/ResultsPage";
 
@@ -13,7 +13,8 @@ interface ExamResult {
 type View =
   | { name: "dashboard" }
   | { name: "exam"; exam: ExamForStudent }
-  | { name: "results"; result: ExamResult };
+  | { name: "results"; result: ExamResult; examTitle?: string }
+  | { name: "viewResult"; exam: ExamForStudent; result: CompletedResultLite };
 
 export default function StudentDashboard() {
   const { profile, signOut } = useAuth();
@@ -25,7 +26,9 @@ export default function StudentDashboard() {
         examId={view.exam.id}
         examTitle={view.exam.title}
         duration={view.exam.duration}
-        onFinish={(result) => setView({ name: "results", result })}
+        onFinish={(result) =>
+          setView({ name: "results", result, examTitle: view.exam.title })
+        }
       />
     );
   }
@@ -36,6 +39,20 @@ export default function StudentDashboard() {
         score={view.result.score}
         strikes={view.result.strikes}
         totalQuestions={view.result.totalQuestions}
+        examTitle={view.examTitle}
+        onBackToDashboard={() => setView({ name: "dashboard" })}
+      />
+    );
+  }
+
+  if (view.name === "viewResult") {
+    return (
+      <ResultsPage
+        score={view.result.score}
+        strikes={view.result.strikes}
+        totalQuestions={view.result.total_questions}
+        examTitle={view.exam.title}
+        completedAt={view.result.completed_at}
         onBackToDashboard={() => setView({ name: "dashboard" })}
       />
     );
@@ -54,6 +71,7 @@ export default function StudentDashboard() {
       <Dashboard
         studentName={profile?.full_name ?? profile?.email ?? "there"}
         onStartExam={(exam) => setView({ name: "exam", exam })}
+        onViewResult={(exam, result) => setView({ name: "viewResult", exam, result })}
       />
     </div>
   );
