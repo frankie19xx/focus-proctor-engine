@@ -8,7 +8,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -289,14 +288,32 @@ export function ExamFormDialog({ open, onOpenChange, exam, onSaved }: ExamFormDi
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
-        <DialogHeader className="shrink-0">
-          <DialogTitle>{isEdit ? "Edit Exam" : "Create New Exam"}</DialogTitle>
-          <DialogDescription>
-            {isEdit
-              ? "Update details and questions for this exam."
-              : "Set up the exam details, then add its questions below."}
-          </DialogDescription>
+        <DialogHeader className="shrink-0 pr-10">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <DialogTitle>{isEdit ? "Edit Exam" : "Create New Exam"}</DialogTitle>
+              <DialogDescription>
+                {isEdit
+                  ? "Update details and questions for this exam."
+                  : "Set up the exam details, then add its questions below."}
+              </DialogDescription>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onOpenChange(false)}
+                disabled={saving}
+              >
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleSave} disabled={saving || loading}>
+                {saving ? "Saving…" : isEdit ? "Save Changes" : "Create Exam"}
+              </Button>
+            </div>
+          </div>
         </DialogHeader>
+        <Separator className="shrink-0" />
 
         {loading ? (
           <div className="py-12 text-center text-sm text-muted-foreground">Loading…</div>
@@ -460,15 +477,6 @@ export function ExamFormDialog({ open, onOpenChange, exam, onSaved }: ExamFormDi
             </div>
           </ScrollArea>
         )}
-
-        <DialogFooter className="shrink-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={saving || loading}>
-            {saving ? "Saving…" : isEdit ? "Save Changes" : "Create Exam"}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
