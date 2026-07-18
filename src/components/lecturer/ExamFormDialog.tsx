@@ -288,8 +288,8 @@ export function ExamFormDialog({ open, onOpenChange, exam, onSaved }: ExamFormDi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle>{isEdit ? "Edit Exam" : "Create New Exam"}</DialogTitle>
           <DialogDescription>
             {isEdit
@@ -301,7 +301,7 @@ export function ExamFormDialog({ open, onOpenChange, exam, onSaved }: ExamFormDi
         {loading ? (
           <div className="py-12 text-center text-sm text-muted-foreground">Loading…</div>
         ) : (
-          <ScrollArea className="flex-1 pr-4 -mr-4">
+          <ScrollArea className="flex-1 min-h-0 pr-4 -mr-4">
             <div className="space-y-6 pb-2">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2 sm:col-span-2">
@@ -461,7 +461,7 @@ export function ExamFormDialog({ open, onOpenChange, exam, onSaved }: ExamFormDi
           </ScrollArea>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>
