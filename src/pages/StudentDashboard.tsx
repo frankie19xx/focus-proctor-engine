@@ -1,16 +1,8 @@
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { Dashboard } from "@/components/Dashboard";
+import { Dashboard, type ExamForStudent } from "@/components/Dashboard";
 import { ExamInterface } from "@/components/ExamInterface";
 import { ResultsPage } from "@/components/ResultsPage";
-
-interface Exam {
-  id: string;
-  title: string;
-  description: string;
-  duration: number;
-  questions: number;
-}
 
 interface ExamResult {
   score: number;
@@ -20,7 +12,7 @@ interface ExamResult {
 
 type View =
   | { name: "dashboard" }
-  | { name: "exam"; exam: Exam }
+  | { name: "exam"; exam: ExamForStudent }
   | { name: "results"; result: ExamResult };
 
 export default function StudentDashboard() {
@@ -30,6 +22,7 @@ export default function StudentDashboard() {
   if (view.name === "exam") {
     return (
       <ExamInterface
+        examId={view.exam.id}
         examTitle={view.exam.title}
         duration={view.exam.duration}
         onFinish={(result) => setView({ name: "results", result })}
