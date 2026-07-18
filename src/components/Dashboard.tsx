@@ -5,7 +5,14 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BookOpen, Clock, FileText, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { BookOpen, Clock, FileText, ShieldAlert, CheckCircle2, History, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Exam as DbExam } from '@/types/exam';
 
@@ -39,9 +46,11 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({ studentName, onStartExam, onViewResult }) => {
   const { user } = useAuth();
   const [exams, setExams] = useState<DbExam[]>([]);
-  const [completedResults, setCompletedResults] = useState<Record<string, CompletedResultLite>>({});
+  // Every completed attempt per exam, newest first.
+  const [attemptsByExam, setAttemptsByExam] = useState<Record<string, CompletedResultLite[]>>({});
   const [stats, setStats] = useState<StudentStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [historyExam, setHistoryExam] = useState<DbExam | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -66,20 +75,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ studentName, onStartExam, 
       .select('exam_id, score, strikes, total_questions, completed_at')
       .eq('student_id', user.id)
       .eq('status', 'completed')
-      .order('completed_at', { ascending: true });
+      .order('completed_at', { ascending: false });
 
-    // Keep the most recent completed attempt per exam (rows are ordered
-    // oldest-first above, so later entries simply overwrite earlier ones).
-    const latestByExam: Record<string, CompletedResultLite> = {};
+    const grouped: Record<string, CompletedResultLite[]> = {};
     for (const r of resultData ?? []) {
-      latestByExam[r.exam_id as string] = {
+      const examId = r.exam_id as string;
+      const attempt: CompletedResultLite = {
         score: r.score as number,
         strikes: r.strikes as number,
         total_questions: r.total_questions as number,
         completed_at: r.completed_at as string,
       };
+      (grouped[examId] ??= []).push(attempt);
     }
-    setCompletedResults(latestByExam);
+    setAttemptsByExam(grouped);
 
     const { data: statsData } = await supabase.rpc('get_student_stats', {
       p_student_id: user.id,
@@ -93,7 +102,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ studentName, onStartExam, 
     load();
   }, [load]);
 
-  const pendingCount = exams.filter((e) => !(e.id in completedResults)).length;
+  const pendingCount = exams.filter((e) => !attemptsByExam[e.id]?.length).length;
+  const historyAttempts = historyExam ? attemptsByExam[historyExam.id] ?? [] : [];
 
   return (
     <div className="container mx-auto py-10 px-4">
@@ -138,8 +148,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ studentName, onStartExam, 
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
           {exams.map((exam) => {
-            const result = completedResults[exam.id];
-            const completed = !!result;
+            const attempts = attemptsByExam[exam.id] ?? [];
+            const completed = attempts.length > 0;
             const examForStudent: ExamForStudent = {
               id: exam.id,
               title: exam.title,
@@ -158,6 +168,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ studentName, onStartExam, 
                       {completed && (
                         <Badge variant="outline" className="flex items-center gap-1 text-emerald-600 border-emerald-200">
                           <CheckCircle2 className="h-3 w-3" /> Completed
+                          {attempts.length > 1 ? ` ×${attempts.length}` : ""}
                         </Badge>
                       )}
                       <Badge variant="outline" className="flex items-center gap-1">
@@ -181,9 +192,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ studentName, onStartExam, 
                       className="flex-1"
                       size="lg"
                       variant="outline"
-                      onClick={() => onViewResult(examForStudent, result)}
+                      onClick={() => setHistoryExam(exam)}
                     >
-                      View Result
+                      <History className="h-4 w-4 mr-1" /> Results
                     </Button>
                   )}
                   <Button
@@ -205,6 +216,68 @@ export const Dashboard: React.FC<DashboardProps> = ({ studentName, onStartExam, 
           })}
         </div>
       )}
+
+      <Dialog open={!!historyExam} onOpenChange={(open) => !open && setHistoryExam(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{historyExam?.title}</DialogTitle>
+            <DialogDescription>
+              {historyAttempts.length} past attempt{historyAttempts.length === 1 ? '' : 's'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {historyAttempts.map((attempt, idx) => {
+              const pct =
+                attempt.total_questions > 0
+                  ? Math.round((attempt.score / attempt.total_questions) * 100)
+                  : 0;
+              const isLatest = idx === 0;
+              return (
+                <button
+                  key={attempt.completed_at}
+                  onClick={() => {
+                    if (!historyExam) return;
+                    setHistoryExam(null);
+                    onViewResult(
+                      {
+                        id: historyExam.id,
+                        title: historyExam.title,
+                        description: historyExam.description ?? '',
+                        duration: historyExam.duration_minutes,
+                        questions: historyExam.total_questions,
+                      },
+                      attempt,
+                    );
+                  }}
+                  className="w-full flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors text-left"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">
+                        {attempt.score}/{attempt.total_questions} ({pct}%)
+                      </span>
+                      {isLatest && (
+                        <Badge variant="secondary" className="text-xs">
+                          Latest
+                        </Badge>
+                      )}
+                      {attempt.strikes > 0 && (
+                        <Badge variant="destructive" className="text-xs">
+                          {attempt.strikes} strike{attempt.strikes === 1 ? '' : 's'}
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {new Date(attempt.completed_at).toLocaleString()}
+                    </p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
