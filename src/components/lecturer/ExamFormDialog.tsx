@@ -15,7 +15,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Trash2, PlusCircle, GripVertical, Upload, Download } from "lucide-react";
 import { toast } from "sonner";
@@ -318,7 +317,7 @@ export function ExamFormDialog({ open, onOpenChange, exam, onSaved }: ExamFormDi
         {loading ? (
           <div className="py-12 text-center text-sm text-muted-foreground">Loading…</div>
         ) : (
-          <ScrollArea className="flex-1 min-h-0 pr-4 -mr-4">
+          <div className="flex-1 min-h-0 overflow-y-auto pr-4 -mr-4 [scrollbar-gutter:stable] [scrollbar-width:auto]">
             <div className="space-y-6 pb-2">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2 sm:col-span-2">
@@ -475,7 +474,7 @@ export function ExamFormDialog({ open, onOpenChange, exam, onSaved }: ExamFormDi
                 ))}
               </div>
             </div>
-          </ScrollArea>
+          </div>
         )}
       </DialogContent>
     </Dialog>
